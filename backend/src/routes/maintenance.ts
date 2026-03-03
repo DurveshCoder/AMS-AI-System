@@ -1,0 +1,111 @@
+import { Router, Response } from 'express';
+import { PrismaClient } from '@prisma/client';
+import { authenticate, AuthRequest } from '../middleware/auth';
+
+const router = Router();
+const prisma = new PrismaClient();
+router.use(authenticate);
+
+// List maintenance logs
+router.get('/', async (req: AuthRequest, res: Response) => {
+    try {
+        const orgId = req.user!.organizationId;
+        const status = req.query.status as string;
+        const type = req.query.type as string;
+        const where: any = { organizationId: orgId };
+        if (status) where.status = status;
+        if (type) where.type = type;
+
+        const logs = await prisma.maintenanceLog.findMany({
+            where,
+            include: {
+                asset: { select: { id: true, name: true, assetCode: true } },
+                technician: { select: { id: true, name: true } }
+            },
+            orderBy: { scheduledDate: 'desc' }
+        });
+        res.json({ success: true, data: logs });
+    } catch (error) {
+        res.status(500).json({ success: false, error: 'Server error' });
+    }
+});
+
+// Create maintenance log
+router.post('/', async (req: AuthRequest, res: Response) => {
+    try {
+        const data = req.body;
+        const log = await prisma.maintenanceLog.create({
+            data: {
+                assetId: data.assetId,
+                type: data.type || 'PREVENTIVE',
+                scheduledDate: new Date(data.scheduledDate),
+                description: data.description,
+                cost: parseFloat(data.cost) || 0,
+                technicianId: data.technicianId || null,
+                status: 'PENDING',
+                organizationId: req.user!.organizationId
+            },
+            include: {
+                asset: { select: { name: true } },
+                technician: { select: { name: true } }
+            }
+        });
+        res.status(201).json({ success: true, data: log });
+    } catch (error) {
+        res.status(500).json({ success: false, error: 'Server error' });
+    }
+});
+
+// Update maintenance log
+router.put('/:id', async (req: AuthRequest, res: Response) => {
+    try {
+        const data = req.body;
+        const updateData: any = {};
+        if (data.type) updateData.type = data.type;
+        if (data.scheduledDate) updateData.scheduledDate = new Date(data.scheduledDate);
+        if (data.description !== undefined) updateData.description = data.description;
+        if (data.cost !== undefined) updateData.cost = parseFloat(data.cost);
+        if (data.technicianId !== undefined) updateData.technicianId = data.technicianId;
+        if (data.status) updateData.status = data.status;
+        if (data.nextMaintenanceDate) updateData.nextMaintenanceDate = new Date(data.nextMaintenanceDate);
+
+        const log = await prisma.maintenanceLog.update({
+            where: { id: req.params.id },
+            data: updateData,
+            include: { asset: { select: { name: true } }, technician: { select: { name: true } } }
+        });
+        res.json({ success: true, data: log });
+    } catch (error) {
+        res.status(500).json({ success: false, error: 'Server error' });
+    }
+});
+
+// Complete maintenance
+router.post('/:id/complete', async (req: AuthRequest, res: Response) => {
+    try {
+        const { cost, notes, nextMaintenanceDate } = req.body;
+        const log = await prisma.maintenanceLog.update({
+            where: { id: req.params.id },
+            data: {
+                status: 'COMPLETED',
+                completedDate: new Date(),
+                cost: cost ? parseFloat(cost) : undefined,
+                description: notes || undefined,
+                nextMaintenanceDate: nextMaintenanceDate ? new Date(nextMaintenanceDate) : null
+            },
+            include: { asset: { select: { name: true } } }
+        });
+
+        // Update asset status back to ACTIVE
+        await prisma.asset.update({
+            where: { id: log.assetId },
+            data: { status: 'ACTIVE' }
+        });
+
+        res.json({ success: true, data: log });
+    } catch (error) {
+        res.status(500).json({ success: false, error: 'Server error' });
+    }
+});
+
+export default router;

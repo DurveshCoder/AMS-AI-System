@@ -1,0 +1,41 @@
+## Secrets
+.env
+**/.env
+**/.env.*
+*.pem
+*.key
+id_ed25519
+id_ed25519.pub
+id_rsa
+id_rsa.pub
+asset-management
+asset-management.pub
+
+## Local databases
+*.db
+*.db-journal
+
+## Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnp.*
+
+## Vite / frontend
+dist/
+.vite/
+
+## Logs
+logs/
+*.log
+
+## OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+
+## Build / cache
+coverage/
+.cache/

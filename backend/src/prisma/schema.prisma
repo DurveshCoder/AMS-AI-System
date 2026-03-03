@@ -1,0 +1,252 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String   @id @default(uuid())
+  email          String   @unique
+  password       String
+  name           String
+  role           String   @default("VIEWER")
+  isActive       Boolean  @default(true)
+  lastLogin      DateTime?
+  organizationId String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization    Organization     @relation(fields: [organizationId], references: [id])
+  assignedAssets  Asset[]          @relation("AssignedUser")
+  maintenanceLogs MaintenanceLog[] @relation("Technician")
+  documents       Document[]
+  importJobs      ImportJob[]
+  auditLogs       AuditLog[]
+}
+
+model Organization {
+  id        String   @id @default(uuid())
+  name      String
+  logo      String?
+  address   String?
+  settings  String   @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users           User[]
+  branches        Branch[]
+  assets          Asset[]
+  suppliers       Supplier[]
+  brands          Brand[]
+  assetTypes      AssetType[]
+  maintenanceLogs MaintenanceLog[]
+  importJobs      ImportJob[]
+}
+
+model Branch {
+  id             String   @id @default(uuid())
+  name           String
+  location       String?
+  address        String?
+  city           String?
+  pincode        String?
+  organizationId String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization     Organization      @relation(fields: [organizationId], references: [id])
+  assets           Asset[]
+  inventoryRecords InventoryRecord[]
+}
+
+model Brand {
+  id             String   @id @default(uuid())
+  name           String
+  logo           String?
+  website        String?
+  description    String?
+  organizationId String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  assets       Asset[]
+  assetTypes   AssetType[]
+}
+
+model Supplier {
+  id             String   @id @default(uuid())
+  companyName    String
+  contactPerson  String?
+  email          String?
+  phone          String?
+  address        String?
+  city           String?
+  pincode        String?
+  website        String?
+  organizationId String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  assets       Asset[]
+}
+
+model AssetType {
+  id                   String  @id @default(uuid())
+  name                 String
+  description          String?
+  depreciationMethod   String  @default("STRAIGHT_LINE")
+  usefulLifeYears      Int     @default(5)
+  salvageValuePercent  Float   @default(10)
+  organizationId       String
+  brandId              String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  brand        Brand?       @relation(fields: [brandId], references: [id])
+  assets       Asset[]
+}
+
+model Asset {
+  id                 String   @id @default(uuid())
+  assetCode          String   @unique
+  name               String
+  description        String?
+  serialNumber       String?
+  status             String   @default("ACTIVE")
+  purchaseDate       DateTime?
+  purchasePrice      Float    @default(0)
+  currentValue       Float    @default(0)
+  warrantyExpiryDate DateTime?
+  location           String?
+  branchId           String?
+  brandId            String?
+  supplierId         String?
+  assetTypeId        String?
+  organizationId     String
+  assignedToUserId   String?
+  photoUrl           String?
+  userManualUrl      String?
+  qrCode             String?
+  tags               String   @default("[]")
+  companyPolicyNotes String?
+  quantity           Int      @default(1)
+  unit               String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  branch               Branch?               @relation(fields: [branchId], references: [id])
+  brand                Brand?                @relation(fields: [brandId], references: [id])
+  supplier             Supplier?             @relation(fields: [supplierId], references: [id])
+  assetType            AssetType?            @relation(fields: [assetTypeId], references: [id])
+  organization         Organization          @relation(fields: [organizationId], references: [id])
+  assignedTo           User?                 @relation("AssignedUser", fields: [assignedToUserId], references: [id])
+  depreciationSchedule DepreciationSchedule[]
+  maintenanceLogs      MaintenanceLog[]
+  inventoryRecords     InventoryRecord[]
+  documents            Document[]
+}
+
+model InventoryRecord {
+  id            String   @id @default(uuid())
+  assetId       String
+  branchId      String
+  quantity      Int      @default(0)
+  minStockLevel Int      @default(0)
+  maxStockLevel Int      @default(100)
+  lastAuditDate DateTime?
+  auditedBy     String?
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  asset  Asset  @relation(fields: [assetId], references: [id])
+  branch Branch @relation(fields: [branchId], references: [id])
+}
+
+model DepreciationSchedule {
+  id                     String   @id @default(uuid())
+  assetId                String
+  year                   Int
+  month                  Int
+  openingValue           Float
+  depreciationAmount     Float
+  closingValue           Float
+  cumulativeDepreciation Float
+  method                 String
+  rate                   Float
+  createdAt              DateTime @default(now())
+
+  asset Asset @relation(fields: [assetId], references: [id])
+}
+
+model MaintenanceLog {
+  id                  String   @id @default(uuid())
+  assetId             String
+  type                String   @default("PREVENTIVE")
+  scheduledDate       DateTime
+  completedDate       DateTime?
+  cost                Float    @default(0)
+  technicianId        String?
+  description         String?
+  status              String   @default("PENDING")
+  nextMaintenanceDate DateTime?
+  organizationId      String
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  asset        Asset        @relation(fields: [assetId], references: [id])
+  technician   User?        @relation("Technician", fields: [technicianId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
+}
+
+model Document {
+  id         String   @id @default(uuid())
+  assetId    String
+  type       String   @default("OTHER")
+  fileName   String
+  fileUrl    String
+  fileSize   Int      @default(0)
+  mimeType   String?
+  uploadedBy String?
+  createdAt  DateTime @default(now())
+
+  asset Asset @relation(fields: [assetId], references: [id])
+  user  User? @relation(fields: [uploadedBy], references: [id])
+}
+
+model ImportJob {
+  id             String   @id @default(uuid())
+  fileName       String
+  status         String   @default("PENDING")
+  totalRows      Int      @default(0)
+  processedRows  Int      @default(0)
+  errorRows      Int      @default(0)
+  errorLog       String   @default("[]")
+  importedBy     String
+  organizationId String
+  createdAt      DateTime @default(now())
+  completedAt    DateTime?
+
+  user         User         @relation(fields: [importedBy], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String
+  action    String
+  entity    String
+  entityId  String?
+  oldValue  String?
+  newValue  String?
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
